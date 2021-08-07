@@ -8,9 +8,11 @@
 #include <ws2tcpip.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
+#include <process.h>
+
 #include <iostream>
 #include <map>
-#include <process.h>
 #include <string>
 
 // Need to link with Ws2_32.lib
@@ -49,23 +51,6 @@ void _basic_send_message(SOCKET s, std::string buf, int type = 0) {
 	send(s, (const char*)&data, sizeof(data), 0);
 }
 
-void send_message(SOCKET s, std::string buf) {
-	if (buf.length() >= 1023) {
-		std::string tmp = buf.substr(0, 1023);
-		buf = buf.substr(1024);
-		_basic_send_message(s, tmp, 1);
-		while (buf.length() > 1023) {
-			std::string tmp = buf.substr(0, 1023);
-			buf = buf.substr(1024);
-			_basic_send_message(s, tmp, 2);
-		}
-		_basic_send_message(s, buf, 3);
-	}
-	else {
-		_basic_send_message(s, buf);
-	}
-}
-
 unsigned __stdcall client_run(void* args) {
 	Client* client = (Client*)args;
 	if (client->socket == INVALID_SOCKET) {
@@ -79,10 +64,19 @@ unsigned __stdcall client_run(void* args) {
 	while (true) {
 		int ret = recv(client->socket, (char*)&recvData, sizeof(recvData), 0);//监听消息
 		if (ret < 0) break;//断开连接
-		std::string tmp = recvData.data;
+		std::string tmp = ""; // = recvData.data;
 		if (recvData.type == 1 || recvData.type == 0) {
-			tmp = client->name + ":" + tmp;
+			time_t now = time(0);
+			tm* ltm = localtime(&now);
+			char t[50];
+			sprintf_s(t, "<%02d:%02d:%02d>", ltm->tm_hour, ltm->tm_min, ltm->tm_sec);
+			tmp = t;
+			tmp += client->name + ":" + recvData.data;
 			strcpy_s(recvData.data, sizeof(recvData.data), tmp.c_str());
+		}
+		else if (recvData.type == 4) {
+			client->name = recvData.data;
+			continue;
 		}
 		for (auto iter = clients.begin(); iter != clients.end(); ++iter) {//群发
 			_basic_send_message(iter->second.socket, recvData.data, recvData.type);
