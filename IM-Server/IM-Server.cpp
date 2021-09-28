@@ -23,7 +23,7 @@
 #define DEFAULT_PORT "27015"
 
 struct transferStruct {
-	int type;
+	int type, length;
 	char data[1024];
 };
 
@@ -44,10 +44,11 @@ const char* welcome_str = "Welcome";
 const int welcome_len = strlen(welcome_str);
 int conn_number = 0;
 
-void _basic_send_message(SOCKET s, std::string buf, int type = 0) {
+void _basic_send_message(SOCKET s,const char* buf, int type = 0, int length = 0) {
 	transferStruct data;
-	strcpy_s(data.data, sizeof(data.data), buf.c_str());
-	data.type = type;
+	if (type != 6 && type != 7) strcpy_s(data.data, sizeof(data.data), buf);
+	else memcpy_s(data.data, 1024, buf, length);
+	data.type = type; data.length = length;
 	send(s, (const char*)&data, sizeof(data), 0);
 }
 
@@ -65,6 +66,7 @@ unsigned __stdcall client_run(void* args) {
 		int ret = recv(client->socket, (char*)&recvData, sizeof(recvData), 0);//监听消息
 		if (ret < 0) break;//断开连接
 		std::string tmp = ""; // = recvData.data;
+		printf("Forward message type: %d\n", recvData.type);
 		if (recvData.type == 1 || recvData.type == 0) {
 			time_t now = time(0);
 			tm* ltm = localtime(&now);
@@ -79,7 +81,7 @@ unsigned __stdcall client_run(void* args) {
 			continue;
 		}
 		for (auto iter = clients.begin(); iter != clients.end(); ++iter) {//群发
-			_basic_send_message(iter->second.socket, recvData.data, recvData.type);
+			_basic_send_message(iter->second.socket, recvData.data, recvData.type, recvData.length);
 		}
 	}
 	clients.erase(client->id);
